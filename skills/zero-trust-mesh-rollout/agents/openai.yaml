@@ -1,0 +1,4 @@
+interface:
+  display_name: "Zero Trust Mesh"
+  short_description: "Roll out and verify zero-trust mesh"
+  default_prompt: "Use $zero-trust-mesh-rollout to add zero-trust-mesh to a service, validate traffic in Kiali, and safely roll it out."
