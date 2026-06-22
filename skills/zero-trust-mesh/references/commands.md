@@ -155,11 +155,27 @@ Optional lint:
 helm lint <chart-dir> -f <chart-dir>/values.yaml -f <chart-dir>/values-<env>.yaml
 ```
 
+Inspect live release values before deciding whether to reuse them:
+
+```bash
+helm get values <release-name> -n <namespace> -a -o yaml
+```
+
+Inspect the live manifest:
+
+```bash
+helm get manifest <release-name> -n <namespace>
+```
+
 ## Live diff and rollout
 
 These commands require user approval before execution.
 
-Update chart dependencies if needed:
+Build or update chart dependencies if needed:
+
+```bash
+helm dependency build <chart-dir>
+```
 
 ```bash
 helm dependency update <chart-dir>
@@ -174,6 +190,15 @@ helm diff upgrade <release-name> <chart-dir> \
   -f <chart-dir>/values-<env>.yaml
 ```
 
+If the full diff includes unrelated image, ingress, or values drift and the user approved only zero-trust changes:
+
+```bash
+helm diff upgrade <release-name> <chart-dir> \
+  -n <namespace> \
+  --reuse-values \
+  -f <chart-dir>/values-zero-trust-<env>.yaml
+```
+
 Apply the release:
 
 ```bash
@@ -181,6 +206,15 @@ helm upgrade --install <release-name> <chart-dir> \
   -n <namespace> \
   -f <chart-dir>/values.yaml \
   -f <chart-dir>/values-<env>.yaml
+```
+
+Zero-trust-only apply against an existing release:
+
+```bash
+helm upgrade --install <release-name> <chart-dir> \
+  -n <namespace> \
+  --reuse-values \
+  -f <chart-dir>/values-zero-trust-<env>.yaml
 ```
 
 ## Post-apply verification
@@ -191,6 +225,12 @@ Check rollout status:
 kubectl -n <namespace> rollout status deploy/<service-name>
 kubectl -n <namespace> get pod -l component=<service-name>
 kubectl -n <namespace> get endpoints <service-name>
+```
+
+Confirm the new policies exist:
+
+```bash
+kubectl -n <namespace> get authorizationpolicy,networkpolicy | grep '<service-name>'
 ```
 
 Check recent logs for policy-related failures:

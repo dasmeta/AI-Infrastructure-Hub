@@ -18,6 +18,7 @@ For concrete command patterns, read [references/commands.md](references/commands
 ### 1. Build local context first
 
 - Find the service repo, Helm chart, environment values files, and existing sibling services that already use `zero-trust-mesh`.
+- If the service already has a Helm release in-cluster, inspect the live release values and manifest before deciding how to roll out the mesh changes.
 - Read the service deployment, service, ingress, and values files to capture:
   - service name
   - namespace
@@ -58,6 +59,7 @@ zeroTrustMesh:
   - `denyAll.enabled: true`
   - `denyAll.podLabels` matching the workload selector
   - `allowPolicies` for every required inbound and outbound path
+- If the current environment values file would introduce unrelated release drift, create a dedicated overlay such as `helm/values-zero-trust-<env>.yaml` that contains only the new `zeroTrustMesh` settings.
 - Reuse existing sibling-service conventions for:
   - ingress controller service names
   - ingress controller pod labels
@@ -90,6 +92,8 @@ zeroTrustMesh:
   - outbound service or host rules rendered as expected
   - selectors matching the workload labels
 - If available and cheap, also run `helm lint`.
+- If the service already exists in-cluster, inspect the live Helm diff before apply and look specifically for unrelated changes such as image drift, ingress hostname drift, or selector drift.
+- If the user wants only zero-trust changes and the full diff includes unrelated changes, switch to a `--reuse-values` rollout with a zero-trust-only overlay file.
 
 ### 6. Approval gate before cluster-facing rollout
 
@@ -100,17 +104,19 @@ zeroTrustMesh:
   - the exact commands you plan to run
 - Get explicit user approval before:
   - `helm diff` against a live cluster
-  - `helm dependency update` if it needs network access
+  - `helm dependency build` or `helm dependency update` if it needs network access
   - `helm upgrade`, `kubectl apply`, or any other cluster mutation
 - If sandbox escalation is required, request it directly with a clear justification.
 
 ### 7. Roll out in this order
 
 1. Run local render validation.
-2. With approval, run `helm dependency update` if needed.
+2. With approval, run `helm dependency build` or `helm dependency update` if needed.
 3. With approval, run `helm diff upgrade` or equivalent live diff.
 4. Review the diff for unexpected policy or selector changes.
-5. With approval, apply via `helm upgrade`.
+5. If the diff includes unrelated release drift and the user approved only zero-trust changes, create a zero-trust-only overlay and re-run the diff with `--reuse-values`.
+6. With approval, apply via `helm upgrade`.
+7. For existing releases where only zero-trust changes are intended, prefer `helm upgrade --install ... --reuse-values -f <overlay-file>`.
 
 If the diff reveals missing peers or obviously wrong labels, stop and fix files before apply.
 
@@ -120,6 +126,7 @@ If the diff reveals missing peers or obviously wrong labels, stop and fix files 
   - pods ready
   - no crash loops
   - service endpoints healthy
+- Confirm the new `AuthorizationPolicy` and `NetworkPolicy` objects exist in the cluster.
 - Recheck Kiali for the same namespace and workload.
 - Use [references/commands.md](references/commands.md) for post-apply Kiali graph, pod, service, and log checks.
 - Look for:
@@ -146,6 +153,7 @@ When using this skill, the final handoff should include:
 - the files changed
 - the observed Kiali inbound and outbound peers
 - which rules were observed live versus inferred from config
+- whether `--reuse-values` was used and why
 - whether rollout was only prepared or fully applied
 - whether post-apply Kiali verification is healthy
 - any remaining uncertain dependency that still needs real traffic to confirm
